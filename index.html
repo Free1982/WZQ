@@ -6,31 +6,33 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
     <meta charset="utf-8" />
     <title>NANA五子棋练习</title>
-    <meta name="description" content="js实现五子棋游戏" />
-    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+    <meta name="description" content="js实现五子棋游戏（含AI对手/禁手/复盘）" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23000'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <meta name="msapplication-TileColor" content="#da532c" />
     <meta name="theme-color" content="#ffffff" />
     <style>
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        height: 100vh;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 16px 10px 28px;
         background: linear-gradient(135deg, #4bc0c8, #c779d0, #feac5e);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        touch-action: manipulation;
       }
       #info {
-        margin-top: -100px;
-        height: 50px;
+        min-height: 24px;
+        line-height: 1.4;
         color: #fff;
         font-size: 18px;
+        font-weight: 600;
         text-align: center;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.25);
       }
 
       #root {
@@ -38,21 +40,23 @@
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        width: 500px;
-        max-width: 90%;
+        width: min(94vw, 500px);
         background-color: #fff;
         border-radius: 4px;
         box-shadow: rgb(0 0 0 / 20%) 0px 2px 1px -1px,
           rgb(0 0 0 / 14%) 0px 1px 1px 0px, rgb(0 0 0 / 12%) 0px 1px 3px 0px;
         overflow: hidden;
-        /* user-select: none;
-        -webkit-tap-highlight-color: rgba(255, 0, 0, 0); */
+        touch-action: manipulation;
       }
 
       .square {
         position: relative;
-        flex-grow: 1;
+        flex: 0 0 auto;
+        width: calc(min(94vw, 500px) / 15);
+        height: calc(min(94vw, 500px) / 15);
         margin: 0;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
         box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4) inset;
       }
       .circle {
@@ -61,6 +65,9 @@
         left: 0;
         transform: translate(-50%, -50%);
         border-radius: 50%;
+        width: calc(min(94vw, 500px) / 18);
+        height: calc(min(94vw, 500px) / 18);
+        pointer-events: none;
       }
 
       .white {
@@ -74,171 +81,535 @@
         border: 1px solid #000;
         box-shadow: 0 1px 3px #eee, 1px 1px 2px rgb(99, 99, 99) inset;
       }
+
+      #panel {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        justify-content: center;
+        align-items: center;
+        max-width: min(94vw, 500px);
+        color: #fff;
+        font-size: 15px;
+      }
+      #panel label { display: flex; align-items: center; gap: 4px; }
+      #panel select, #panel button {
+        font-size: 15px;
+        padding: 6px 10px;
+        min-height: 36px;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.9);
+        background: rgba(255, 255, 255, 0.9);
+        color: #222;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #panel button:hover { background: #fff; }
+      #panel select:disabled { opacity: 0.5; cursor: not-allowed; }
+      #replayBar { display: inline-flex; align-items: center; gap: 6px; }
+      #replayRange { width: min(50vw, 200px); }
     </style>
   </head>
 
   <body>
-    <div id="info">白子先行</div>
+    <div id="info">加载中…</div>
     <div id="root"></div>
+    <div id="panel">
+      <label>模式
+        <select id="mode">
+          <option value="pve" selected>人机对战</option>
+          <option value="pvp">双人对战</option>
+        </select>
+      </label>
+      <label>难度
+        <select id="difficulty">
+          <option value="random">简单（随机）</option>
+          <option value="normal" selected>普通（保守）</option>
+          <option value="hard">困难（激进）</option>
+        </select>
+      </label>
+      <label>先手
+        <select id="first">
+          <option value="player" selected>玩家先</option>
+          <option value="ai">AI先</option>
+        </select>
+      </label>
+      <label>你的执子
+        <select id="side">
+          <option value="white" selected>白子</option>
+          <option value="black">黑子</option>
+        </select>
+      </label>
+      <label>禁手
+        <select id="forbidden">
+          <option value="off" selected>关</option>
+          <option value="on">开（限黑棋）</option>
+        </select>
+      </label>
+      <button id="undoBtn">悔棋</button>
+      <button id="restartBtn">重新开始</button>
+      <button id="exportBtn">导出棋谱</button>
+      <button id="replayBtn">复盘</button>
+      <span id="replayBar" style="display:none">
+        <input type="range" id="replayRange" min="0" value="0" />
+        <span id="replayInfo"></span>
+      </span>
+    </div>
+
     <script>
       // 灵感来自于这里：
       // 原文：http://www.ferecord.com/create-gobang-with-javascriot.html
       // demo：http://www.ferecord.com/lab/gobang/
-      // 我简化了代码，去掉了类和代理，让大家更容易理解。
+      // 扩展：AI 对手 + 悔棋 + 难度/先手/执子可选 + 禁手规则 + 棋谱导出/复盘 + 双人对战。
 
-      // 获取id为root的标签元素
-      let root = document.getElementById("root");
-
-      // 设置棋盘格子数15×15
+      const EMPTY = 0, BLACK = 1, WHITE = 2; // 黑=1，白=2
+      const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
       let cell = 15;
+      let board, moveStack, humanColor, aiColor, aiFirst, isHumanTurn, gameOver;
+      let mode, currentPlayer, forbiddenOn, isReplaying;
 
-      // 棋盘的html，初始是空的
+      let root = document.getElementById("root");
+      let info = document.getElementById("info");
+      let modeSel = document.getElementById("mode");
+      let difficultySel = document.getElementById("difficulty");
+      let firstSel = document.getElementById("first");
+      let sideSel = document.getElementById("side");
+      let forbiddenSel = document.getElementById("forbidden");
+      let undoBtn = document.getElementById("undoBtn");
+      let restartBtn = document.getElementById("restartBtn");
+      let exportBtn = document.getElementById("exportBtn");
+      let replayBtn = document.getElementById("replayBtn");
+      let replayBar = document.getElementById("replayBar");
+      let replayRange = document.getElementById("replayRange");
+      let replayInfo = document.getElementById("replayInfo");
+
+      // 渲染棋盘 DOM（只生成一次，之后靠清 class 复用；尺寸由 CSS 按视口自适应）
       let html = "";
-
-      // 棋盘的棋子数据，初始是空的
-      let board = [];
-
-      // root元素的屏幕宽度
-      let rwidth = root.clientWidth;
-
-      // 棋子的格子宽度
-      let swidth = parseInt(rwidth / cell, 10) + "px";
-      // 棋子的圆形宽度
-      let cwidth = parseInt(rwidth / cell / 1.2, 10) + "px";
-
-      // 设置一个格子数长度的数组
-      let arr = Array.from({ length: cell });
-
-      // 循环该数组，创建出棋盘html，横向15个，竖向15个
-      arr.map((_, row) => {
-        //行
-        arr.map((_, column) => {
-          //列
-          // 棋盘格子，一个方块，里面是一个圆形，此时圆形还看不到
-          let box = `<div class="square" style="width:${swidth};height:${swidth}">
-                <div class="circle" column="${column}" row="${row}" style="width:${cwidth};height:${cwidth}"></div>
+      for (let row = 0; row < cell; row++) {
+        for (let column = 0; column < cell; column++) {
+          html += `<div class="square" data-col="${column}" data-row="${row}">
+                <div class="circle"></div>
             </div>`;
-          html = html + box;
-        });
-      });
-      // 把写好的html 设置为root元素的html，就是渲染到屏幕上
+        }
+      }
       root.innerHTML = html;
 
-      // 棋子颜色
-      let chessColor = "black";
+      // ===== 工具 =====
+      function colorName(v) { return v === WHITE ? "白棋" : "黑棋"; }
+      function updateInfo(t) { info.innerHTML = t; }
+      function opp(v) { return v === BLACK ? WHITE : BLACK; }
 
-      //给棋盘添加监听事件，当click点击时，执行函数
-      root.addEventListener("click", (e) => {
-        // e是浏览器传入的参数，包含点击的位置等数据
-        // console.log(e);
-        // 鼠标点击的标签
-        let target = e.target;
-        // 判断点击的标签是否包含circle的css，也就是说判断点击的是否是棋子格子
-        // 另一个判断是看它是不是只有一个css，如果有两个就说明已经有棋子了，就不会执行if里的代码
-        // &&符号表示，只有同时判断成功，才会执行{}里的代码
-        if (
-          target.className.includes("circle") &&
-          target.classList.length == 1
-        ) {
-          if (chessColor === "white") {
-            // 改变棋子颜色，因为每次点击都会交换选手
-            chessColor = "black";
-            // 改变提示
-            document.getElementById("info").innerHTML = "白子回合";
-          } else {
-            chessColor = "white";
-            document.getElementById("info").innerHTML = "黑子回合";
+      function placeAt(col, row, val) {
+        board[row][col] = val;
+        let cls = val === BLACK ? "black" : "white";
+        let sq = root.querySelector(`.square[data-col="${col}"][data-row="${row}"]`);
+        sq.querySelector(".circle").classList.add(cls);
+        sq.classList.add("filled");
+      }
+
+      function checkWin(col, row, val) {
+        for (let [dx, dy] of DIRS) {
+          let count = 1;
+          for (let s of [1, -1]) {
+            let i = 1;
+            while (true) {
+              let nc = col + dx * i * s, nr = row + dy * i * s;
+              if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+              if (board[nr][nc] === val) { count++; i++; }
+              else break;
+            }
           }
-          // 把颜色css加入标签的class列表里
-          target.classList.add(chessColor);
-          // 获取元素的行列序号
-          let column = parseInt(target.getAttribute("column"));
-          let row = parseInt(target.getAttribute("row"));
-          console.log(column, row, chessColor);
-          // 把棋子放进棋盘数据中
-          board.push({
-            column: column,
-            row: row,
-            chessColor: chessColor,
-          });
+          if (count >= 5) return true;
+        }
+        return false;
+      }
 
-          // 判断是否获胜
-          // 用延迟1毫秒调用是为了等待浏览器把棋子渲染到界面上
-          setTimeout(() => {
-            checkWin(column, row, chessColor);
-          }, 1);
+      // ===== AI 评分 =====
+      function evaluatePoint(col, row, val) {
+        board[row][col] = val;
+        let total = 0;
+        for (let [dx, dy] of DIRS) {
+          let count = 1, block = 0;
+          for (let s of [1, -1]) {
+            let i = 1;
+            while (true) {
+              let nc = col + dx * i * s, nr = row + dy * i * s;
+              if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) { block++; break; }
+              if (board[nr][nc] === val) { count++; i++; }
+              else if (board[nr][nc] === EMPTY) { break; }
+              else { block++; break; }
+            }
+          }
+          total += scoreShape(count, block);
+        }
+        board[row][col] = EMPTY;
+        return total;
+      }
+      function scoreShape(count, block) {
+        if (count >= 5) return 100000;
+        if (block === 2) return 0;
+        if (count === 4) return block === 0 ? 10000 : 1000;
+        if (count === 3) return block === 0 ? 1000 : 100;
+        if (count === 2) return block === 0 ? 100 : 10;
+        if (count === 1) return block === 0 ? 1 : 0;
+        return 0;
+      }
+
+      function getCandidates() {
+        let seen = new Set(), res = [], hasStone = false;
+        for (let r = 0; r < cell; r++) {
+          for (let c = 0; c < cell; c++) {
+            if (board[r][c] !== EMPTY) {
+              hasStone = true;
+              for (let dr = -2; dr <= 2; dr++) {
+                for (let dc = -2; dc <= 2; dc++) {
+                  let nr = r + dr, nc = c + dc;
+                  if (nr < 0 || nr >= cell || nc < 0 || nc >= cell) continue;
+                  if (board[nr][nc] !== EMPTY) continue;
+                  let key = nc + "," + nr;
+                  if (!seen.has(key)) { seen.add(key); res.push([nc, nr]); }
+                }
+              }
+            }
+          }
+        }
+        if (!hasStone) return [[7, 7]];
+        return res;
+      }
+
+      function aiMove() {
+        let cands = getCandidates();
+        if (difficultySel.value === "random") {
+          return cands[Math.floor(Math.random() * cands.length)];
+        }
+        let aw, dw;
+        if (difficultySel.value === "normal") { aw = 1.0; dw = 0.9; }
+        else { aw = 1.5; dw = 1.0; }
+        let best = cands[0], bestScore = -Infinity;
+        for (let [c, r] of cands) {
+          let score;
+          if (forbiddenOn && aiColor === BLACK) {
+            board[r][c] = BLACK; // 假定落黑，再检测禁手
+            let fb = isForbiddenAt(c, r, BLACK);
+            board[r][c] = EMPTY;
+            if (fb) { score = -1e9; }
+            else { score = evaluatePoint(c, r, BLACK) * aw + evaluatePoint(c, r, WHITE) * dw; }
+          } else {
+            score = evaluatePoint(c, r, BLACK) * aw + evaluatePoint(c, r, WHITE) * dw;
+          }
+          if (score > bestScore) { bestScore = score; best = [c, r]; }
+        }
+        return best;
+      }
+
+      // ===== 禁手判定（黑棋）=====
+      // 以下函数假定 (col,row) 已在 board 上置为 BLACK
+      function lineRun(col, row, dx, dy) {
+        let pos = 0, neg = 0, i = 1;
+        while (true) {
+          let nc = col + dx * i, nr = row + dy * i;
+          if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+          if (board[nr][nc] === BLACK) { pos++; i++; } else break;
+        }
+        i = 1;
+        while (true) {
+          let nc = col - dx * i, nr = row - dy * i;
+          if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+          if (board[nr][nc] === BLACK) { neg++; i++; } else break;
+        }
+        return pos + neg + 1;
+      }
+      // 该方向是否能"填一空即连五"（四：活四/冲四/跳四）
+      function lineIsFour(col, row, dx, dy) {
+        for (let s of [1, -1]) {
+          let i = 1;
+          while (true) {
+            let nc = col + dx * i * s, nr = row + dy * i * s;
+            if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+            if (board[nr][nc] === EMPTY) {
+              board[nr][nc] = BLACK;
+              let w = checkWin(nc, nr, BLACK);
+              board[nr][nc] = EMPTY;
+              if (w) return true;
+              break;
+            } else if (board[nr][nc] === BLACK) { i++; }
+            else break;
+          }
+        }
+        return false;
+      }
+      // 该方向是否"活四"（4 连且两端均空）
+      function isLineFourShape(col, row, dx, dy) {
+        let pos = 0, neg = 0, openPos = false, openNeg = false, i = 1;
+        while (true) {
+          let nc = col + dx * i, nr = row + dy * i;
+          if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+          if (board[nr][nc] === BLACK) { pos++; i++; }
+          else { if (board[nr][nc] === EMPTY) openPos = true; break; }
+        }
+        i = 1;
+        while (true) {
+          let nc = col - dx * i, nr = row - dy * i;
+          if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+          if (board[nr][nc] === BLACK) { neg++; i++; }
+          else { if (board[nr][nc] === EMPTY) openNeg = true; break; }
+        }
+        return (pos + neg + 1) === 4 && openPos && openNeg;
+      }
+      // 该方向是否"活三"（存在空位填黑后成活四）
+      function lineIsOpenThree(col, row, dx, dy) {
+        for (let s of [1, -1]) {
+          let i = 1;
+          while (true) {
+            let nc = col + dx * i * s, nr = row + dy * i * s;
+            if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
+            if (board[nr][nc] === EMPTY) {
+              board[nr][nc] = BLACK;
+              let ok = isLineFourShape(nc, nr, dx, dy);
+              board[nr][nc] = EMPTY;
+              if (ok) return true;
+              i++;
+            } else if (board[nr][nc] === BLACK) { i++; }
+            else break;
+          }
+        }
+        return false;
+      }
+      // 综合：该点（已置黑）是否禁手
+      function isForbiddenAt(col, row, val) {
+        if (val !== BLACK) return false;
+        let four = 0, three = 0;
+        for (let [dx, dy] of DIRS) {
+          if (lineRun(col, row, dx, dy) >= 6) return true; // 长连
+          let isF = lineIsFour(col, row, dx, dy);
+          let isT = lineIsOpenThree(col, row, dx, dy);
+          if (isF) four++;
+          else if (isT) three++;
+        }
+        if (four >= 2) return true; // 四四
+        if (three >= 2) return true; // 三三
+        return false;
+      }
+      // 给外部用：在 (col,row) 落 val 是否禁手（成五优先不算禁）
+      function forbiddenCheck(col, row, val) {
+        if (!(forbiddenOn && val === BLACK)) return { forbidden: false, win5: false, long: false };
+        board[row][col] = BLACK;
+        let isLong = false;
+        for (let [dx, dy] of DIRS) if (lineRun(col, row, dx, dy) >= 6) isLong = true;
+        let win5 = !isLong && checkWin(col, row, BLACK);
+        let fb = isLong ? true : (win5 ? false : isForbiddenAt(col, row, BLACK));
+        board[row][col] = EMPTY;
+        return { forbidden: fb, win5: win5, long: isLong };
+      }
+
+      // ===== 回合/落子流程 =====
+      function nextColor() {
+        if (moveStack.length === 0) return aiFirst ? aiColor : humanColor;
+        let top = moveStack[moveStack.length - 1];
+        return opp(top.color);
+      }
+
+      function aiTurn() {
+        if (gameOver) return;
+        if (moveStack.length === cell * cell) { gameOver = true; updateInfo("平局！"); return; }
+        let [c, r] = aiMove();
+        placeAt(c, r, aiColor);
+        moveStack.push({ col: c, row: r, color: aiColor });
+        if (checkWin(c, r, aiColor)) { endGame(colorName(aiColor)); return; }
+        isHumanTurn = true;
+        updateInfo(`轮到你（${colorName(humanColor)}）`);
+      }
+
+      function endGame(winner) {
+        gameOver = true;
+        updateInfo(winner + "胜利！");
+        if (window.confirm(winner + "胜利！是否再来一局？")) startGame();
+      }
+
+      // 试落子：含禁手校验。onSuccess 在合法落子后回调
+      function tryPlace(val, col, row, onSuccess) {
+        let chk = forbiddenCheck(col, row, val);
+        if (chk.forbidden) {
+          updateInfo(chk.long ? "长连禁手！该点无效，请另落子" : "禁手！该点无效，请另落子");
+          return;
+        }
+        placeAt(col, row, val);
+        moveStack.push({ col, row, color: val });
+        if (checkWin(col, row, val)) { endGame(colorName(val)); return; }
+        onSuccess();
+      }
+
+      function resetState() {
+        gameOver = false;
+        let nxt = nextColor();
+        if (nxt === humanColor) {
+          isHumanTurn = true;
+          updateInfo(`轮到你（${colorName(humanColor)}）`);
         } else {
-          console.log("该格子已有棋子");
+          isHumanTurn = false;
+          updateInfo(`AI 思考中（${colorName(aiColor)}）`);
+          setTimeout(aiTurn, 300);
+        }
+      }
+
+      function popOne() {
+        let mv = moveStack.pop();
+        if (!mv) return;
+        board[mv.row][mv.col] = EMPTY;
+        let sq = root.querySelector(`.square[data-col="${mv.col}"][data-row="${mv.row}"]`);
+        sq.querySelector(".circle").classList.remove("black", "white");
+        sq.classList.remove("filled");
+      }
+
+      function undo() {
+        if (isReplaying) { updateInfo("请先退出复盘"); return; }
+        if (moveStack.length === 0) return;
+        if (mode === "pve") {
+          popOne();
+          if (moveStack.length > 0 && moveStack[moveStack.length - 1].color === humanColor) popOne();
+          resetState();
+        } else {
+          popOne();
+          currentPlayer = moveStack.length > 0 ? opp(moveStack[moveStack.length - 1].color) : BLACK;
+          updateInfo(`双人对战：${colorName(currentPlayer)}方回合`);
+        }
+      }
+
+      // ===== 复盘 =====
+      function repaintBoard(upTo) {
+        root.querySelectorAll(".square").forEach((sq) => {
+          sq.querySelector(".circle").classList.remove("black", "white");
+          sq.classList.remove("filled");
+        });
+        board = Array.from({ length: cell }, () => Array(cell).fill(0));
+        for (let k = 0; k < upTo; k++) {
+          let mv = moveStack[k];
+          placeAt(mv.col, mv.row, mv.color);
+        }
+      }
+      function showReplay(n) {
+        repaintBoard(n);
+        replayInfo.textContent = `${n}/${moveStack.length}`;
+        updateInfo(n >= moveStack.length ? "复盘结束（当前局面）" : `复盘 ${n}/${moveStack.length} 步`);
+      }
+      function toggleReplay() {
+        if (!isReplaying) {
+          if (moveStack.length === 0) { updateInfo("暂无棋谱可复盘"); return; }
+          isReplaying = true;
+          replayBtn.textContent = "退出复盘";
+          replayBar.style.display = "inline-flex";
+          replayRange.max = moveStack.length;
+          replayRange.value = moveStack.length;
+          showReplay(moveStack.length);
+        } else {
+          isReplaying = false;
+          replayBtn.textContent = "复盘";
+          replayBar.style.display = "none";
+          repaintBoard(moveStack.length);
+          if (gameOver) updateInfo("对局已结束");
+          else if (mode === "pve") resetState();
+          else updateInfo(`双人对战：${colorName(currentPlayer)}方回合`);
+        }
+      }
+
+      // ===== 棋谱导出 =====
+      function exportSgf() {
+        if (moveStack.length === 0) { updateInfo("暂无棋谱可导出"); return; }
+        let lines = [
+          "NANA五子棋 棋谱",
+          "模式: " + (mode === "pve" ? "人机对战" : "双人对战"),
+          "总步数: " + moveStack.length,
+          "坐标格式: (列,行) 1-based",
+          "----------------------------------------"
+        ];
+        moveStack.forEach((mv, i) => {
+          lines.push(`${i + 1}. (${mv.col + 1},${mv.row + 1}) ${mv.color === BLACK ? "黑" : "白"}`);
+        });
+        let blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+        let a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "wzq_record.txt";
+        a.click();
+        URL.revokeObjectURL(a.href);
+        updateInfo("棋谱已导出 wzq_record.txt");
+      }
+
+      // ===== 开局初始化 =====
+      function applyModeUI() {
+        let pvp = modeSel.value === "pvp";
+        difficultySel.disabled = pvp;
+        firstSel.disabled = pvp;
+        sideSel.disabled = pvp;
+      }
+      function startGame() {
+        mode = modeSel.value;
+        forbiddenOn = forbiddenSel.value === "on";
+        board = Array.from({ length: cell }, () => Array(cell).fill(0));
+        moveStack = [];
+        gameOver = false;
+        isReplaying = false;
+        replayBar.style.display = "none";
+        replayBtn.textContent = "复盘";
+        root.querySelectorAll(".square").forEach((sq) => {
+          sq.querySelector(".circle").classList.remove("black", "white");
+          sq.classList.remove("filled");
+        });
+
+        if (mode === "pve") {
+          humanColor = sideSel.value === "white" ? WHITE : BLACK;
+          aiColor = opp(humanColor);
+          aiFirst = firstSel.value === "ai";
+          let nxt = nextColor();
+          if (nxt === humanColor) {
+            isHumanTurn = true;
+            updateInfo(`轮到你（${colorName(humanColor)}）`);
+          } else {
+            isHumanTurn = false;
+            updateInfo(`AI 思考中（${colorName(aiColor)}）`);
+            setTimeout(aiTurn, 400);
+          }
+        } else {
+          currentPlayer = BLACK; // 双人对战黑先
+          updateInfo("双人对战：黑方回合");
+        }
+      }
+
+      // ===== 事件 =====
+      root.addEventListener("click", (e) => {
+        if (gameOver || isReplaying) return;
+        let sq = e.target.closest(".square");
+        if (!sq) return;
+        if (sq.classList.contains("filled")) return; // 该点已有子
+        let col = parseInt(sq.dataset.col);
+        let row = parseInt(sq.dataset.row);
+        if (mode === "pve") {
+          if (!isHumanTurn) return;
+          tryPlace(humanColor, col, row, () => {
+            isHumanTurn = false;
+            updateInfo(`AI 思考中（${colorName(aiColor)}）`);
+            setTimeout(aiTurn, 200);
+          });
+        } else {
+          tryPlace(currentPlayer, col, row, () => {
+            currentPlayer = opp(currentPlayer);
+            updateInfo(`双人对战：${colorName(currentPlayer)}方回合`);
+          });
         }
       });
-      // 这个函数稍微有点难，多练习理解
-      function checkWin(column, row, chessColor) {
-        // 四个轴：横、竖、左斜、右斜，[0,1]代表x轴方向不变，y轴向前1
-        //
-        //      | 0,1 |  1,1
-        //x轴   | 原点 | 1,0
-        //      |      | 1,-1
-        //         y轴
-        let axis = [
-          [0, 1],
-          [1, 0],
-          [1, 1],
-          [1, -1],
-        ];
-        axis.map((direct) => {
-          // 反方向
-          let reverse = [-direct[0], -direct[1]];
-          // 该轴正方向上相同颜色的棋子数量
-          let positiveDirectionNumber = 0;
-          // 反方向上相同颜色的棋子数量
-          let negativeDirectionNumber = 0;
-          // 先是正方向循环5次，既从原点开始向四个正方向查找相同颜色的棋子数量
-          for (let index = 1; index < 6; index++) {
-            // 方向的坐标要乘次数，就是向外找几个点
-            let pcolumn = column + direct[0] * index;
-            let prow = row + direct[1] * index;
-            // 查找board中该方向坐标是否有这个棋子
-            let phave = board.some(
-              (item) =>
-                pcolumn === item.column &&
-                prow === item.row &&
-                chessColor === item.chessColor
-            );
-            // 如果有那么正方向棋子数加1
-            if (phave) {
-              positiveDirectionNumber++;
-            } else {
-              // 没有的话代表该方向不可能再成功，直接退出循环
-              break;
-            }
-          }
-          // 然后是反方向循环五次，这里其实可以和前面的循环合并，但为了更好理解我就分开了
-          for (let index = 1; index < 6; index++) {
-            // 这里是乘反方向坐标
-            let ncolumn = column + reverse[0] * index;
-            let nrow = row + reverse[1] * index;
-            let nhave = board.some(
-              (item) =>
-                ncolumn === item.column &&
-                nrow === item.row &&
-                chessColor === item.chessColor
-            );
-            if (nhave) {
-              negativeDirectionNumber++;
-            } else {
-              break;
-            }
-          }
-          // 如果正反方向加起来超过或等于4个同色棋子，加上自身一共5个，则胜利
-          if (positiveDirectionNumber + negativeDirectionNumber >= 4) {
-            // 提示胜利方后reload刷新页面重新开始
-            window.confirm(
-              (chessColor === "white" ? "白棋" : "黑棋") + "胜利!"
-            );
-            window.location.reload();
-          }
-        });
-      }
+
+      undoBtn.addEventListener("click", undo);
+      restartBtn.addEventListener("click", startGame);
+      exportBtn.addEventListener("click", exportSgf);
+      replayBtn.addEventListener("click", toggleReplay);
+      replayRange.addEventListener("input", () => { if (isReplaying) showReplay(+replayRange.value); });
+      modeSel.addEventListener("change", () => { applyModeUI(); startGame(); });
+      firstSel.addEventListener("change", startGame);
+      sideSel.addEventListener("change", startGame);
+      forbiddenSel.addEventListener("change", startGame);
+      // 难度改变无需重开，下次 AI 落子即生效
+
+      applyModeUI();
+      startGame();
     </script>
   </body>
 </html>

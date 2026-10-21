@@ -64,6 +64,15 @@
         -webkit-tap-highlight-color: transparent;
         box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4) inset;
       }
+      /* 补全棋盘外框：格子 inset 阴影只画了上/左外边，这里在网格内容区边界补上右/下外边，使 15×15 网格四边完整 */
+      #root::after {
+        content: "";
+        position: absolute;
+        inset: calc(100% / 30);
+        border-right: 1px solid rgba(0, 0, 0, 0.4);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+        pointer-events: none;
+      }
       .circle {
         position: absolute;
         top: 0;

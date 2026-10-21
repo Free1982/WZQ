@@ -151,8 +151,8 @@
       </label>
       <label>禁手
         <select id="forbidden">
-          <option value="on" selected>开（限黑棋）</option>
-          <option value="on">开（限黑棋）</option>
+          <option value="on" selected>开</option>
+          <option value="off">关</option>
         </select>
       </label>
       <button id="undoBtn">悔棋</button>
@@ -175,7 +175,7 @@
       const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
       let cell = 15;
       let board, moveStack, humanColor, aiColor, aiFirst, isHumanTurn, gameOver;
-      let mode, currentPlayer, forbiddenOn, isReplaying;
+      let mode, currentPlayer, forbiddenOn, forbiddenColor, isReplaying;
 
       let root = document.getElementById("root");
       let info = document.getElementById("info");
@@ -297,9 +297,9 @@
         let best = cands[0], bestScore = -Infinity;
         for (let [c, r] of cands) {
           let score;
-          if (forbiddenOn && aiColor === BLACK) {
-            board[r][c] = BLACK; // 假定落黑，再检测禁手
-            let fb = isForbiddenAt(c, r, BLACK);
+          if (forbiddenOn && aiColor === forbiddenColor) {
+            board[r][c] = forbiddenColor; // 假定落先手方，再检测禁手
+            let fb = isForbiddenAt(c, r, forbiddenColor);
             board[r][c] = EMPTY;
             if (fb) { score = -1e9; }
             else { score = evaluatePoint(c, r, BLACK) * aw + evaluatePoint(c, r, WHITE) * dw; }
@@ -311,20 +311,20 @@
         return best;
       }
 
-      // ===== 禁手判定（黑棋）=====
-      // 以下函数假定 (col,row) 已在 board 上置为 BLACK
+      // ===== 禁手判定（限先手方）=====
+      // 以下函数假定 (col,row) 已在 board 上置为 forbiddenColor（先手方颜色）
       function lineRun(col, row, dx, dy) {
         let pos = 0, neg = 0, i = 1;
         while (true) {
           let nc = col + dx * i, nr = row + dy * i;
           if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
-          if (board[nr][nc] === BLACK) { pos++; i++; } else break;
+          if (board[nr][nc] === forbiddenColor) { pos++; i++; } else break;
         }
         i = 1;
         while (true) {
           let nc = col - dx * i, nr = row - dy * i;
           if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
-          if (board[nr][nc] === BLACK) { neg++; i++; } else break;
+          if (board[nr][nc] === forbiddenColor) { neg++; i++; } else break;
         }
         return pos + neg + 1;
       }
@@ -336,12 +336,12 @@
             let nc = col + dx * i * s, nr = row + dy * i * s;
             if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
             if (board[nr][nc] === EMPTY) {
-              board[nr][nc] = BLACK;
-              let w = checkWin(nc, nr, BLACK);
+              board[nr][nc] = forbiddenColor;
+              let w = checkWin(nc, nr, forbiddenColor);
               board[nr][nc] = EMPTY;
               if (w) return true;
               break;
-            } else if (board[nr][nc] === BLACK) { i++; }
+            } else if (board[nr][nc] === forbiddenColor) { i++; }
             else break;
           }
         }
@@ -353,14 +353,14 @@
         while (true) {
           let nc = col + dx * i, nr = row + dy * i;
           if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
-          if (board[nr][nc] === BLACK) { pos++; i++; }
+          if (board[nr][nc] === forbiddenColor) { pos++; i++; }
           else { if (board[nr][nc] === EMPTY) openPos = true; break; }
         }
         i = 1;
         while (true) {
           let nc = col - dx * i, nr = row - dy * i;
           if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
-          if (board[nr][nc] === BLACK) { neg++; i++; }
+          if (board[nr][nc] === forbiddenColor) { neg++; i++; }
           else { if (board[nr][nc] === EMPTY) openNeg = true; break; }
         }
         return (pos + neg + 1) === 4 && openPos && openNeg;
@@ -373,12 +373,12 @@
             let nc = col + dx * i * s, nr = row + dy * i * s;
             if (nc < 0 || nc >= cell || nr < 0 || nr >= cell) break;
             if (board[nr][nc] === EMPTY) {
-              board[nr][nc] = BLACK;
+              board[nr][nc] = forbiddenColor;
               let ok = isLineFourShape(nc, nr, dx, dy);
               board[nr][nc] = EMPTY;
               if (ok) return true;
               i++;
-            } else if (board[nr][nc] === BLACK) { i++; }
+            } else if (board[nr][nc] === forbiddenColor) { i++; }
             else break;
           }
         }
@@ -386,7 +386,7 @@
       }
       // 综合：该点（已置黑）是否禁手
       function isForbiddenAt(col, row, val) {
-        if (val !== BLACK) return false;
+        if (val !== forbiddenColor) return false;
         let four = 0, three = 0;
         for (let [dx, dy] of DIRS) {
           if (lineRun(col, row, dx, dy) >= 6) return true; // 长连
@@ -401,12 +401,12 @@
       }
       // 给外部用：在 (col,row) 落 val 是否禁手（成五优先不算禁）
       function forbiddenCheck(col, row, val) {
-        if (!(forbiddenOn && val === BLACK)) return { forbidden: false, win5: false, long: false };
-        board[row][col] = BLACK;
+        if (!(forbiddenOn && val === forbiddenColor)) return { forbidden: false, win5: false, long: false };
+        board[row][col] = forbiddenColor;
         let isLong = false;
         for (let [dx, dy] of DIRS) if (lineRun(col, row, dx, dy) >= 6) isLong = true;
-        let win5 = !isLong && checkWin(col, row, BLACK);
-        let fb = isLong ? true : (win5 ? false : isForbiddenAt(col, row, BLACK));
+        let win5 = !isLong && checkWin(col, row, forbiddenColor);
+        let fb = isLong ? true : (win5 ? false : isForbiddenAt(col, row, forbiddenColor));
         board[row][col] = EMPTY;
         return { forbidden: fb, win5: win5, long: isLong };
       }
@@ -570,6 +570,7 @@
           humanColor = sideSel.value === "white" ? WHITE : BLACK;
           aiColor = opp(humanColor);
           aiFirst = firstSel.value === "ai";
+          forbiddenColor = aiFirst ? aiColor : humanColor; // 先手方（首落子者）才受禁手约束
           let nxt = nextColor();
           if (nxt === humanColor) {
             isHumanTurn = true;
@@ -580,6 +581,7 @@
             setTimeout(aiTurn, 400);
           }
         } else {
+          forbiddenColor = BLACK; // 双人对战先手为黑
           currentPlayer = BLACK; // 双人对战黑先
           updateInfo("双人对战：黑方回合");
         }

@@ -37,23 +37,28 @@
 
       #root {
         position: relative;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        width: min(94vw, 500px);
+        display: grid;
+        grid-template-columns: repeat(15, 1fr);
+        grid-template-rows: repeat(15, 1fr);
+        width: min(96vw, 500px);
+        aspect-ratio: 1 / 1;
+        padding: calc(100% / 30);
+        box-sizing: border-box;
         background-color: #fff;
         border-radius: 4px;
         box-shadow: rgb(0 0 0 / 20%) 0px 2px 1px -1px,
           rgb(0 0 0 / 14%) 0px 1px 1px 0px, rgb(0 0 0 / 12%) 0px 1px 3px 0px;
         overflow: hidden;
         touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .square {
         position: relative;
-        flex: 0 0 auto;
-        width: calc(min(94vw, 500px) / 15);
-        height: calc(min(94vw, 500px) / 15);
+        width: 100%;
+        height: 100%;
         margin: 0;
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
@@ -65,9 +70,13 @@
         left: 0;
         transform: translate(-50%, -50%);
         border-radius: 50%;
-        width: calc(min(94vw, 500px) / 18);
-        height: calc(min(94vw, 500px) / 18);
+        width: 82%;
+        height: 82%;
         pointer-events: none;
+      }
+      /* 落子预览：悬停/移动时半透明提示将落在何处，提升点击精准感 */
+      .square.preview .circle {
+        opacity: 1;
       }
 
       .white {
@@ -413,6 +422,7 @@
         if (gameOver) return;
         if (moveStack.length === cell * cell) { gameOver = true; updateInfo("平局！"); return; }
         let [c, r] = aiMove();
+        clearPreview();
         placeAt(c, r, aiColor);
         moveStack.push({ col: c, row: r, color: aiColor });
         if (checkWin(c, r, aiColor)) { endGame(colorName(aiColor)); return; }
@@ -554,6 +564,7 @@
           sq.querySelector(".circle").classList.remove("black", "white");
           sq.classList.remove("filled");
         });
+        clearPreview();
 
         if (mode === "pve") {
           humanColor = sideSel.value === "white" ? WHITE : BLACK;
@@ -574,14 +585,57 @@
         }
       }
 
+      // ===== 落子预览（提升点击精准感）=====
+      let previewSq = null;
+      // 命中测试：把点击坐标映射到最近的网格交叉点（消除"整格可点→落点偏半格"的问题）
+      function hitTest(e) {
+        const rect = root.getBoundingClientRect();
+        const cs = getComputedStyle(root);
+        const padL = parseFloat(cs.paddingLeft) || 0;
+        const padT = parseFloat(cs.paddingTop) || 0;
+        const innerW = rect.width - padL - (parseFloat(cs.paddingRight) || 0);
+        const step = innerW / cell; // 相邻交叉点间距（正方形棋盘，横纵相同）
+        const x = e.clientX - rect.left - padL;
+        const y = e.clientY - rect.top - padT;
+        let col = Math.round(x / step);
+        let row = Math.round(y / step);
+        col = Math.max(0, Math.min(cell - 1, col));
+        row = Math.max(0, Math.min(cell - 1, row));
+        const sq = root.querySelector(`.square[data-col="${col}"][data-row="${row}"]`);
+        return { col, row, sq };
+      }
+      function clearPreview() {
+        if (previewSq) {
+          previewSq.classList.remove("preview");
+          let c = previewSq.querySelector(".circle");
+          if (c) c.style.background = "";
+          previewSq = null;
+        }
+      }
+      function showPreview(sq) {
+        if (!sq || sq.classList.contains("filled") || sq === previewSq) return;
+        clearPreview();
+        let color = (mode === "pve") ? humanColor : currentPlayer;
+        let c = sq.querySelector(".circle");
+        c.style.background = color === BLACK ? "rgba(0,0,0,0.28)" : "rgba(120,120,120,0.35)";
+        sq.classList.add("preview");
+        previewSq = sq;
+      }
+      root.addEventListener("pointermove", (e) => {
+        if (gameOver || isReplaying) return;
+        if (mode === "pve" && !isHumanTurn) { clearPreview(); return; }
+        const { sq } = hitTest(e);
+        showPreview(sq);
+      });
+      root.addEventListener("pointerleave", clearPreview);
+
       // ===== 事件 =====
       root.addEventListener("click", (e) => {
         if (gameOver || isReplaying) return;
-        let sq = e.target.closest(".square");
+        const { col, row, sq } = hitTest(e);
         if (!sq) return;
         if (sq.classList.contains("filled")) return; // 该点已有子
-        let col = parseInt(sq.dataset.col);
-        let row = parseInt(sq.dataset.row);
+        clearPreview(); // 清除预览内联样式，避免覆盖真实落子颜色
         if (mode === "pve") {
           if (!isHumanTurn) return;
           tryPlace(humanColor, col, row, () => {

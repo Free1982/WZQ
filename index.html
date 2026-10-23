@@ -39,8 +39,11 @@
         --board: min(96vw, 500px);
         position: relative;
         display: grid;
-        grid-template-columns: repeat(15, 1fr);
-        grid-template-rows: repeat(15, 1fr);
+        /* 15 条线 = 14 个间隔。格子只跨 14 格，第 15 格宽/高为 0，
+           这样最后一个交点(第 15 条线)正好落在棋盘内容区边界上，
+           不会多出一条没有落点的"假线"。 */
+        grid-template-columns: repeat(14, 1fr) 0;
+        grid-template-rows: repeat(14, 1fr) 0;
         width: var(--board);
         aspect-ratio: 1 / 1;
         padding: calc(var(--board) / 30);
@@ -80,8 +83,10 @@
         left: 0;
         transform: translate(-50%, -50%);
         border-radius: 50%;
-        width: 82%;
-        height: 82%;
+        /* 棋子尺寸按全局 --board 计算，不依赖格子宽度：
+           最后一个格子宽/高为 0，用百分比会算成 0 而"消失"。 */
+        width: calc(var(--board) / 15 * 0.82);
+        height: calc(var(--board) / 15 * 0.82);
         pointer-events: none;
       }
       /* 落子预览：悬停/移动时半透明提示将落在何处，提升点击精准感 */
@@ -606,7 +611,9 @@
         const padL = parseFloat(cs.paddingLeft) || 0;
         const padT = parseFloat(cs.paddingTop) || 0;
         const innerW = rect.width - padL - (parseFloat(cs.paddingRight) || 0);
-        const step = innerW / cell; // 相邻交叉点间距（正方形棋盘，横纵相同）
+        // 15 条线之间只有 14 个间隔，所以间距 = 内容宽 / (cell - 1)；
+        // 用 /cell 会让最右、最下两列算不到边界（点边缘线落不了子）。
+        const step = innerW / (cell - 1);
         const x = e.clientX - rect.left - padL;
         const y = e.clientY - rect.top - padT;
         let col = Math.round(x / step);
